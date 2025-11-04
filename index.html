@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام مراقبة الحرارة والرطوبة - حقيقي</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            direction: rtl;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .current-stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .temperature {
+            border-left: 5px solid #ff4757;
+        }
+        
+        .humidity {
+            border-left: 5px solid #2ed573;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .temperature .stat-value {
+            color: #ff4757;
+        }
+        
+        .humidity .stat-value {
+            color: #2ed573;
+        }
+        
+        table {
+            margin: 30px auto;
+            border-collapse: collapse;
+            width: 100%;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        th {
+            background-color: #4a69bd;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        tr:hover {
+            background-color: #e9ecef;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin-top: 30px;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            background: #4a69bd;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+            transition: background 0.3s ease;
+        }
+        
+        button:hover {
+            background: #3c5aa8;
+        }
+        
+        .last-update {
+            color: #666;
+            margin-top: 15px;
+            font-style: italic;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        @media (max-width: 768px) {
+            .current-stats {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .stat-card {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌡️ نظام مراقبة الحرارة والرطوبة - الوقت الحقيقي</h1>
+        
+        <div class="status loading" id="connectionStatus">
+            🔄 جاري الاتصال بالخادم...
+        </div>
+        
+        <div class="current-stats">
+            <div class="stat-card temperature">
+                <h3>🌡️ درجة الحرارة الحالية</h3>
+                <div class="stat-value" id="currentTemp">-- °C</div>
+                <p>آخر تحديث</p>
+            </div>
+            
+            <div class="stat-card humidity">
+                <h3>💧 الرطوبة الحالية</h3>
+                <div class="stat-value" id="currentHumidity">-- %</div>
+                <p>آخر تحديث</p>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="startAutoRefresh()">▶️ بدء التحديث التلقائي</button>
+            <button onclick="stopAutoRefresh()">⏹️ إيقاف التحديث</button>
+            <button onclick="fetchData()">🔄 تحديث الآن</button>
+        </div>
+        
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>الوقت</th>
+                    <th>درجة الحرارة (°C)</th>
+                    <th>الرطوبة (%)</th>
+                    <th>الحالة</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4">جاري تحميل البيانات...</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="chart-container">
+            <canvas id="chart" width="800" height="400"></canvas>
+        </div>
+        
+        <div class="last-update" id="lastUpdate">
+            آخر تحديث: --
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ ⚠️ ⚠️ مهم: استبدل هذا الرابط برابط ملف data.json في مستودعك ⚠️ ⚠️ ⚠️
+        const DATA_URL = 'https://raw.githubusercontent.com/your_username/your_repo_name/main/data.json';
+        
+        // إعداد الرسم البياني
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'درجة الحرارة °C',
+                        data: [],
+                        borderColor: '#ff4757',
+                        backgroundColor: 'rgba(255, 71, 87, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'الرطوبة %',
+                        data: [],
+                        borderColor: '#2ed573',
+                        backgroundColor: 'rgba(46, 213, 115, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'تغير الحرارة والرطوبة مع الزمن - بيانات حقيقية',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'القيمة'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'الوقت'
+                        }
+                    }
+                }
+            }
+        });
+
+        let refreshInterval;
+        let isConnected = false;
+
+        // دالة تحديد الحالة بناءً على القيم
+        function getStatus(temperature, humidity) {
+            let status = '';
+            let emoji = '';
+            
+            if (temperature > 28) {
+                status = 'حار';
+                emoji = '🔥';
+            } else if (temperature < 22) {
+                status = 'بارد';
+                emoji = '❄️';
+            } else {
+                status = 'معتدل';
+                emoji = '🌤️';
+            }
+            
+            if (humidity > 70) {
+                status += ' رطب';
+                emoji += ' 💦';
+            } else if (humidity < 50) {
+                status += ' جاف';
+                emoji += ' ☀️';
+            }
+            
+            return { status, emoji };
+        }
+
+        // دالة جلب البيانات من GitHub
+        async function fetchData() {
+            try {
+                updateStatus('loading', '🔄 جاري جلب البيانات...');
+                
+                // إضافة timestamp لمنع التخزين المؤقت
+                const url = DATA_URL + '?t=' + new Date().getTime();
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`خطأ في الخادم: ${response.status}`);
+                }
+                
+                const readings = await response.json();
+                const tbody = document.querySelector("#dataTable tbody");
+                const statusDiv = document.getElementById('connectionStatus');
+                
+                if (!readings || readings.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">لا توجد بيانات حتى الآن</td></tr>';
+                    updateStatus('disconnected', '❌ لا توجد بيانات متاحة');
+                    return;
+                }
+                
+                // تحديث الإحصائيات الحالية (أحدث قراءة)
+                const latestReading = readings[readings.length - 1];
+                document.getElementById('currentTemp').textContent = `${latestReading.temperature} °C`;
+                document.getElementById('currentHumidity').textContent = `${latestReading.humidity} %`;
+                
+                // تحديث الجدول
+                tbody.innerHTML = '';
+                readings.slice().reverse().forEach(item => {
+                    const statusInfo = getStatus(item.temperature, item.humidity);
+                    const row = `
+                        <tr>
+                            <td>${item.time}</td>
+                            <td>${item.temperature} °C</td>
+                            <td>${item.humidity} %</td>
+                            <td>${statusInfo.emoji} ${statusInfo.status}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+                
+                // تحديث الرسم البياني
+                chart.data.labels = readings.map(item => item.time);
+                chart.data.datasets[0].data = readings.map(item => item.temperature);
+                chart.data.datasets[1].data = readings.map(item => item.humidity);
+                chart.update();
+                
+                // تحديث وقت آخر تحديث
+                document.getElementById('lastUpdate').textContent = 
+                    `آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}`;
+                
+                updateStatus('connected', `✅ متصل - ${readings.length} قراءة`);
+                isConnected = true;
+                
+            } catch (error) {
+                console.error('خطأ في جلب البيانات:', error);
+                updateStatus('disconnected', '❌ خطأ في الاتصال بالخادم');
+                isConnected = false;
+                
+                const tbody = document.querySelector("#dataTable tbody");
+                tbody.innerHTML = '<tr><td colspan="4">فشل في تحميل البيانات</td></tr>';
+            }
+        }
+
+        // دالة تحديث حالة الاتصال
+        function updateStatus(type, message) {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        // بدء التحديث التلقائي
+        function startAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            refreshInterval = setInterval(fetchData, 5000); // كل 5 ثواني
+            updateStatus('connected', '✅ التحديث التلقائي مفعل');
+        }
+
+        // إيقاف التحديث التلقائي
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+            updateStatus('connected', '⏸️ التحديث التلقائي متوقف');
+        }
+
+        // بدء التحميل الأولي
+        window.addEventListener('load', function() {
+            fetchData(); // تحميل البيانات فوراً
+            startAutoRefresh(); // بدء التحديث التلقائي
+        });
+    </script>
+</body>
+</html>
